@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Management System</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <h1>🎓 Student Management System</h1>
+    <p class="muted">Add students, calculate grades, and view records dynamically.</p>
+  </header>
+
+  <main class="container">
+    <!-- Form -->
+    <section class="card">
+      <h2>Add Student</h2>
+
+      <form id="studentForm" class="form" novalidate>
+        <div class="row">
+          <div class="field">
+            <label for="name">Student Name</label>
+            <input type="text" id="name" placeholder="e.g., Janapriya" />
+            <small class="error" id="nameErr"></small>
+          </div>
+
+          <div class="field">
+            <label for="roll">Roll No</label>
+            <input type="text" id="roll" placeholder="e.g., 21A05" />
+            <small class="error" id="rollErr"></small>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="marks">Marks (0 - 100)</label>
+            <input type="number" id="marks" placeholder="e.g., 85" />
+            <small class="error" id="marksErr"></small>
+          </div>
+
+          <div class="field">
+            <label for="dept">Department</label>
+            <select id="dept">
+              <option value="">Select</option>
+              <option value="CSE">CSE</option>
+              <option value="ECE">ECE</option>
+              <option value="EEE">EEE</option>
+              <option value="MECH">MECH</option>
+              <option value="CIVIL">CIVIL</option>
+            </select>
+            <small class="error" id="deptErr"></small>
+          </div>
+        </div>
+
+        <button type="submit" class="btn">Add Record</button>
+        <p class="success" id="successMsg"></p>
+      </form>
+    </section>
+
+    <!-- Search + Stats -->
+    <section class="card">
+      <h2>Records</h2>
+
+      <div class="tools">
+        <input id="search" type="text" placeholder="Search by name / roll / dept..." />
+        <button class="btn btn-outline" id="clearBtn" type="button">Clear All</button>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Roll</th>
+              <th>Dept</th>
+              <th>Marks</th>
+              <th>Grade</th>
+              <th>Result</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <!-- JS fills rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <p class="muted hint">Tip: Try adding multiple students and search/filter them.</p>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
