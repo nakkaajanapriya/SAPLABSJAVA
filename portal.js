@@ -1,3 +1,22 @@
+// ---------------- AUTH (SESSION) ----------------
+const SESSION_KEY = "foodPortal_session_v1";
+
+function getSession(){
+  return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+}
+function requireAuth(){
+  const s = getSession();
+  if(!s?.role){
+    window.location.href = "auth.html";
+    return null;
+  }
+  return s;
+}
+function logout(){
+  localStorage.removeItem(SESSION_KEY);
+  window.location.href = "auth.html";
+}
+
 // ---------------------- STORAGE KEYS ----------------------
 const DB_KEY = "foodPortalDB_v1";
 const CART_KEY = "foodPortalCart_v1";
@@ -11,26 +30,13 @@ const demoDB = () => ({
     { code: "FOOD20", percent: 20 }
   ],
   restaurants: [
-    {
-      id: crypto.randomUUID(),
-      name: "Spice Kingdom",
-      items: seedItems("Spice Kingdom")
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "Urban Biryani",
-      items: seedItems("Urban Biryani")
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "Sweet Haven",
-      items: seedItems("Sweet Haven")
-    }
+    { id: crypto.randomUUID(), name: "Spice Kingdom", items: seedItems(), reviews: [] },
+    { id: crypto.randomUUID(), name: "Urban Biryani", items: seedItems(), reviews: [] },
+    { id: crypto.randomUUID(), name: "Sweet Haven", items: seedItems(), reviews: [] }
   ]
 });
 
-function seedItems(rname){
-  // 6 categories, at least 6 dishes each
+function seedItems(){
   const base = {
     Starters: [
       ["Gobi 65", 120], ["Paneer Tikka", 180], ["Chicken 65", 190],
@@ -58,12 +64,11 @@ function seedItems(rname){
     ]
   };
 
-  // create items with some offers/BOGO mixed
   let items = [];
   Object.entries(base).forEach(([cat, list], idx) => {
     list.forEach((d, i) => {
-      const offerPercent = (i === 1 && idx % 2 === 0) ? 15 : 0;     // some 15% off
-      const bogo = (i === 0 && idx % 3 === 0) ? true : false;       // some BOGO
+      const offerPercent = (i === 1 && idx % 2 === 0) ? 15 : 0;
+      const bogo = (i === 0 && idx % 3 === 0) ? true : false;
       items.push({
         id: crypto.randomUUID(),
         name: d[0],
@@ -74,7 +79,6 @@ function seedItems(rname){
       });
     });
   });
-
   return items;
 }
 
@@ -86,36 +90,112 @@ function getDB(){
     localStorage.setItem(DB_KEY, JSON.stringify(fresh));
     return fresh;
   }
-  return JSON.parse(raw);
+  const db = JSON.parse(raw);
+  db.restaurants = (db.restaurants || []).map(r => ({ ...r, reviews: r.reviews || [] }));
+  return db;
 }
 function saveDB(db){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 
-function getCart(){
-  return JSON.parse(localStorage.getItem(CART_KEY) || "[]");
+function getCart(){ return JSON.parse(localStorage.getItem(CART_KEY) || "[]"); }
+function saveCart(cart){ localStorage.setItem(CART_KEY, JSON.stringify(cart)); }
+
+function getAppliedCoupon(){ return JSON.parse(localStorage.getItem(COUPON_APPLIED_KEY) || "null"); }
+function setAppliedCoupon(c){ localStorage.setItem(COUPON_APPLIED_KEY, JSON.stringify(c)); }
+
+// ---------------------- REVIEWS ----------------------
+function stars(n){
+  n = Math.max(0, Math.min(5, Number(n || 0)));
+  return "⭐".repeat(n) + "☆".repeat(5 - n);
 }
-function saveCart(cart){
-  localStorage.setItem(CART_KEY, JSON.stringify(cart));
+function getRestaurantAvgRating(restaurant){
+  const revs = restaurant.reviews || [];
+  if(revs.length === 0) return { avg: 0, count: 0 };
+  const sum = revs.reduce((a, r) => a + Number(r.rating || 0), 0);
+  return { avg: sum / revs.length, count: revs.length };
 }
 
-function getAppliedCoupon(){
-  return JSON.parse(localStorage.getItem(COUPON_APPLIED_KEY) || "null");
-}
-function setAppliedCoupon(c){
-  localStorage.setItem(COUPON_APPLIED_KEY, JSON.stringify(c));
+function renderReviews(){
+  const session = getSession();
+  const db = getDB();
+
+  const list = document.getElementById("reviewsList");
+  const avgBadge = document.getElementById("avgRatingBadge");
+  const formArea = document.getElementById("reviewFormArea");
+  const msg = document.getElementById("reviewMsg");
+  if(msg) msg.innerHTML = "";
+
+  if(!list || !avgBadge || !formArea) return;
+
+  if(!activeRestaurantId){
+    avgBadge.innerText = "Avg: -";
+    list.innerHTML = `<div class="text-muted">Select a restaurant to see reviews.</div>`;
+    formArea.classList.add("d-none");
+    return;
+  }
+
+  const r = db.restaurants.find(x => x.id === activeRestaurantId);
+  if(!r){
+    avgBadge.innerText = "Avg: -";
+    list.innerHTML = `<div class="text-muted">Restaurant not found.</div>`;
+    formArea.classList.add("d-none");
+    return;
+  }
+
+  const { avg, count } = getRestaurantAvgRating(r);
+  avgBadge.innerText = count ? `Avg: ${avg.toFixed(1)} (${count})` : "Avg: -";
+
+  const reviews = (r.reviews || []).slice().sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+  list.innerHTML = reviews.length
+    ? reviews.map(rv => `
+      <div class="border rounded-3 p-2 mb-2 bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">${rv.buyerName || "Customer"}</div>
+          <div class="small">${stars(rv.rating)}</div>
+        </div>
+        <div class="small-muted">${new Date(rv.createdAt).toLocaleString()}</div>
+        <div class="mt-1">${String(rv.text || "").replace(/</g,"&lt;")}</div>
+      </div>
+    `).join("")
+    : `<div class="text-muted">No reviews yet. Be the first!</div>`;
+
+  if(session?.role === "buyer") formArea.classList.remove("d-none");
+  else formArea.classList.add("d-none");
 }
 
-// ---------------------- UI TOGGLES ----------------------
-function showBuyer(){
-  document.getElementById("buyerSection").classList.remove("d-none");
-  document.getElementById("sellerSection").classList.add("d-none");
+function submitReview(){
+  const session = getSession();
+  if(session?.role !== "buyer"){ alert("Only buyers can submit reviews."); return; }
+  if(!activeRestaurantId){ alert("Select a restaurant first."); return; }
+
+  const rating = Number(document.getElementById("reviewRating").value);
+  const text = document.getElementById("reviewText").value.trim();
+  const msg = document.getElementById("reviewMsg");
+  msg.innerHTML = "";
+
+  if(!text){
+    msg.innerHTML = `<span class="text-danger">Please write a review.</span>`;
+    return;
+  }
+
+  const db = getDB();
+  const r = db.restaurants.find(x => x.id === activeRestaurantId);
+  if(!r) return;
+
+  r.reviews.push({
+    id: crypto.randomUUID(),
+    buyerEmail: session.buyerEmail,
+    buyerName: session.buyerName,
+    rating,
+    text,
+    createdAt: Date.now()
+  });
+
+  saveDB(db);
+  document.getElementById("reviewText").value = "";
+  msg.innerHTML = `<span class="text-success">✅ Review submitted!</span>`;
+
   renderBuyer();
-}
-function showSeller(){
-  document.getElementById("sellerSection").classList.remove("d-none");
-  document.getElementById("buyerSection").classList.add("d-none");
-  renderSellerRestaurants();
-  renderSellerCoupons();
-  renderSellerItems();
+  renderReviews();
 }
 
 // ---------------------- BUYER RENDER ----------------------
@@ -125,7 +205,6 @@ function renderBuyer(){
   const db = getDB();
   const q = (document.getElementById("searchInput")?.value || "").toLowerCase();
 
-  // restaurants list
   const wrap = document.getElementById("restaurantList");
   wrap.innerHTML = "";
 
@@ -139,11 +218,15 @@ function renderBuyer(){
       card.className = "restaurant-card" + (activeRestaurantId === r.id ? " active" : "");
       card.onclick = () => { activeRestaurantId = r.id; renderBuyer(); };
 
+      const rt = getRestaurantAvgRating(r);
+
       card.innerHTML = `
         <div class="d-flex justify-content-between align-items-start">
           <div>
             <div class="fw-bold">${r.name}</div>
-            <div class="small-muted">Items: ${r.items.length}</div>
+            <div class="small-muted">
+              Items: ${r.items.length} • ⭐ ${rt.count ? rt.avg.toFixed(1) : "-"} (${rt.count})
+            </div>
           </div>
           <span class="pill">Open</span>
         </div>
@@ -153,7 +236,6 @@ function renderBuyer(){
       wrap.appendChild(col);
     });
 
-  // menu
   const badge = document.getElementById("activeRestaurantBadge");
   const menuArea = document.getElementById("menuArea");
 
@@ -163,32 +245,24 @@ function renderBuyer(){
   } else {
     const r = db.restaurants.find(x => x.id === activeRestaurantId);
     badge.innerText = r ? r.name : "Restaurant";
-    if(!r){
-      menuArea.innerHTML = `<div class="text-muted">Restaurant not found.</div>`;
-    } else {
-      menuArea.innerHTML = renderMenuColumns(r, q);
-      bindAddToCartButtons(r.id);
-    }
+    menuArea.innerHTML = r ? renderMenuColumns(r, q) : `<div class="text-muted">Not found.</div>`;
+    bindAddToCartButtons();
   }
 
   renderCart();
   renderOffers();
+  renderReviews();
 }
 
 function renderMenuColumns(restaurant, q){
   const categories = ["Starters","Soups","Biryanis","Desserts","Drinks","Specials"];
-
   const filtered = restaurant.items.filter(it => it.name.toLowerCase().includes(q) || restaurant.name.toLowerCase().includes(q));
 
   const byCat = {};
   categories.forEach(c => byCat[c] = []);
-  filtered.forEach(it => {
-    if(!byCat[it.category]) byCat[it.category] = [];
-    byCat[it.category].push(it);
-  });
+  filtered.forEach(it => (byCat[it.category] ||= []).push(it));
 
   let html = `<div class="row g-3">`;
-
   categories.forEach(cat => {
     html += `
       <div class="col-md-6">
@@ -196,62 +270,49 @@ function renderMenuColumns(restaurant, q){
           <div class="card-body">
             <div class="d-flex align-items-center justify-content-between mb-2">
               <h5 class="m-0">${cat}</h5>
-              <span class="pill">${byCat[cat].length} items</span>
+              <span class="pill">${(byCat[cat]||[]).length} items</span>
             </div>
-            <div class="menu-grid">`;
-
-    (byCat[cat] || []).forEach(it => {
-      const offerLine = it.offerPercent > 0 ? `<span class="pill">🔥 ${it.offerPercent}% OFF</span>` : "";
-      const bogoLine = it.bogo ? `<span class="pill">🎁 BOGO</span>` : "";
-      const badges = (offerLine || bogoLine) ? `<div class="d-flex gap-2 flex-wrap mt-1">${offerLine}${bogoLine}</div>` : "";
-
-      html += `
-        <div class="menu-item">
-          <div class="d-flex justify-content-between">
-            <div class="fw-semibold">${it.name}</div>
-            <div class="fw-bold">₹${it.price}</div>
+            <div class="menu-grid">
+              ${(byCat[cat]||[]).map(it => {
+                const offerLine = it.offerPercent > 0 ? `<span class="pill">🔥 ${it.offerPercent}% OFF</span>` : "";
+                const bogoLine = it.bogo ? `<span class="pill">🎁 BOGO</span>` : "";
+                const badges = (offerLine || bogoLine) ? `<div class="d-flex gap-2 flex-wrap mt-1">${offerLine}${bogoLine}</div>` : "";
+                return `
+                  <div class="menu-item">
+                    <div class="d-flex justify-content-between">
+                      <div class="fw-semibold">${it.name}</div>
+                      <div class="fw-bold">₹${it.price}</div>
+                    </div>
+                    ${badges}
+                    <button class="btn btn-sm btn-dark w-100 mt-2 addToCartBtn"
+                      data-rid="${restaurant.id}" data-iid="${it.id}">
+                      Add to Cart
+                    </button>
+                  </div>
+                `;
+              }).join("")}
+            </div>
           </div>
-          ${badges}
-          <button class="btn btn-sm btn-dark w-100 mt-2 addToCartBtn"
-            data-rid="${restaurant.id}"
-            data-iid="${it.id}">
-            Add to Cart
-          </button>
         </div>
-      `;
-    });
-
-    html += `</div></div></div></div>`;
+      </div>
+    `;
   });
-
   html += `</div>`;
   return html;
 }
 
 function bindAddToCartButtons(){
   document.querySelectorAll(".addToCartBtn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const rid = btn.dataset.rid;
-      const iid = btn.dataset.iid;
-      addToCart(rid, iid);
-    });
+    btn.addEventListener("click", () => addToCart(btn.dataset.rid, btn.dataset.iid));
   });
 }
 
-// ---------------------- CART LOGIC ----------------------
+// ---------------------- CART + BILL ----------------------
 function addToCart(restaurantId, itemId){
-  const db = getDB();
-  const r = db.restaurants.find(x => x.id === restaurantId);
-  if(!r) return;
-  const it = r.items.find(x => x.id === itemId);
-  if(!it) return;
-
   const cart = getCart();
   const existing = cart.find(x => x.restaurantId === restaurantId && x.itemId === itemId);
-
   if(existing) existing.qty += 1;
   else cart.push({ restaurantId, itemId, qty: 1 });
-
   saveCart(cart);
   renderCart();
   renderOffers();
@@ -271,13 +332,14 @@ function changeQty(restaurantId, itemId, delta){
 function clearCart(){
   saveCart([]);
   setAppliedCoupon(null);
-  document.getElementById("couponInput").value = "";
-  document.getElementById("couponMsg").innerHTML = "";
+  const c = document.getElementById("couponInput");
+  const cm = document.getElementById("couponMsg");
+  if(c) c.value = "";
+  if(cm) cm.innerHTML = "";
   renderCart();
   renderOffers();
 }
 
-// ---------------------- BILL CALC (OFFERS + BOGO + COUPONS) ----------------------
 function computeBill(){
   const db = getDB();
   const cart = getCart();
@@ -293,15 +355,9 @@ function computeBill(){
 
     const price = Number(it.price);
     const qty = Number(ci.qty);
-
-    // Base line total
     const lineBase = price * qty;
 
-    // Item offer % discount
     const itemOfferDiscount = it.offerPercent ? (lineBase * (it.offerPercent / 100)) : 0;
-
-    // ✅ BOGO FIX: for qty N, free items = floor(N/2)
-    // e.g., buy 1 get 1 => pay for ceil(N/2)
     const freeCount = it.bogo ? Math.floor(qty / 2) : 0;
     const bogoDiscount = freeCount * price;
 
@@ -311,51 +367,25 @@ function computeBill(){
     subtotal += lineBase;
     discount += lineDiscount;
 
-    return {
-      restaurantName: r.name,
-      itemName: it.name,
-      price,
-      qty,
-      offerPercent: it.offerPercent,
-      bogo: it.bogo,
-      freeCount,
-      lineBase,
-      lineDiscount,
-      lineNet
-    };
+    return { restaurantId: r.id, itemId: it.id, restaurantName: r.name, itemName: it.name, price, qty, freeCount, offerPercent: it.offerPercent, bogo: it.bogo, lineNet };
   }).filter(Boolean);
 
-  // Coupon discount applies on (subtotal - item discounts)
   const afterItemDiscount = Math.max(0, subtotal - discount);
-  let couponDiscount = 0;
-
-  if(appliedCoupon?.percent){
-    couponDiscount = afterItemDiscount * (appliedCoupon.percent / 100);
-  }
+  const couponDiscount = appliedCoupon?.percent ? (afterItemDiscount * (appliedCoupon.percent / 100)) : 0;
 
   const totalDiscount = discount + couponDiscount;
-
   const tax = (afterItemDiscount - couponDiscount) * db.settings.taxRate;
   const delivery = cart.length > 0 ? Number(db.settings.deliveryFee) : 0;
   const total = Math.max(0, (afterItemDiscount - couponDiscount) + tax + delivery);
 
-  return {
-    lines,
-    subtotal,
-    discount: totalDiscount,
-    itemDiscount: discount,
-    couponDiscount,
-    tax,
-    delivery,
-    total,
-    appliedCoupon
-  };
+  return { lines, subtotal, discount: totalDiscount, tax, delivery, total, appliedCoupon };
 }
 
 function renderCart(){
-  const db = getDB();
-  const cart = getCart();
   const wrap = document.getElementById("cartItems");
+  const cart = getCart();
+  if(!wrap) return;
+
   if(cart.length === 0){
     wrap.innerHTML = `<div class="text-muted">Cart is empty.</div>`;
     updateTotals();
@@ -363,14 +393,12 @@ function renderCart(){
   }
 
   const bill = computeBill();
-
-  let html = "";
-  bill.lines.forEach(line => {
+  wrap.innerHTML = bill.lines.map(line => {
     const offerText = [];
     if(line.offerPercent > 0) offerText.push(`${line.offerPercent}% OFF`);
     if(line.bogo) offerText.push(`BOGO (free: ${line.freeCount})`);
 
-    html += `
+    return `
       <div class="border rounded-3 p-2 mb-2 bg-white">
         <div class="d-flex justify-content-between">
           <div>
@@ -384,53 +412,42 @@ function renderCart(){
           </div>
         </div>
         <div class="d-flex gap-2 mt-2">
-          <button class="btn btn-sm btn-outline-dark" onclick="changeQty('${getCartKeySafe(line)}','${line.itemName}',0)" style="display:none"></button>
-          <button class="btn btn-sm btn-outline-dark" onclick="changeQtyFromLine('${line.restaurantName}','${line.itemName}',-1)">-</button>
-          <button class="btn btn-sm btn-outline-dark" onclick="changeQtyFromLine('${line.restaurantName}','${line.itemName}',1)">+</button>
+          <button class="btn btn-sm btn-outline-dark" onclick="changeQty('${line.restaurantId}','${line.itemId}',-1)">-</button>
+          <button class="btn btn-sm btn-outline-dark" onclick="changeQty('${line.restaurantId}','${line.itemId}',1)">+</button>
         </div>
       </div>
     `;
-  });
+  }).join("");
 
-  wrap.innerHTML = html;
   updateTotals();
-}
-
-// helpers to change qty by finding ids safely
-function changeQtyFromLine(restaurantName, itemName, delta){
-  const db = getDB();
-  const r = db.restaurants.find(x => x.name === restaurantName);
-  if(!r) return;
-  const it = r.items.find(x => x.name === itemName);
-  if(!it) return;
-  changeQty(r.id, it.id, delta);
 }
 
 function updateTotals(){
   const bill = computeBill();
-  document.getElementById("subtotal").innerText = `₹${Math.round(bill.subtotal)}`;
-  document.getElementById("discount").innerText = `- ₹${Math.round(bill.discount)}`;
-  document.getElementById("tax").innerText = `₹${Math.round(bill.tax)}`;
-  document.getElementById("delivery").innerText = `₹${Math.round(bill.delivery)}`;
-  document.getElementById("total").innerText = `₹${Math.round(bill.total)}`;
+  const setText = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
+  setText("subtotal", `₹${Math.round(bill.subtotal)}`);
+  setText("discount", `- ₹${Math.round(bill.discount)}`);
+  setText("tax", `₹${Math.round(bill.tax)}`);
+  setText("delivery", `₹${Math.round(bill.delivery)}`);
+  setText("total", `₹${Math.round(bill.total)}`);
 
-  if(bill.appliedCoupon?.code){
-    document.getElementById("couponMsg").innerHTML =
-      `<span class="text-success">Applied: <b>${bill.appliedCoupon.code}</b> (${bill.appliedCoupon.percent}% off)</span>`;
+  const msg = document.getElementById("couponMsg");
+  if(msg && bill.appliedCoupon?.code){
+    msg.innerHTML = `<span class="text-success">Applied: <b>${bill.appliedCoupon.code}</b> (${bill.appliedCoupon.percent}% off)</span>`;
   }
 }
 
-// ---------------------- OFFERS DISPLAY ----------------------
 function renderOffers(){
   const db = getDB();
   const cart = getCart();
   const offersList = document.getElementById("offersList");
+  if(!offersList) return;
+
   if(cart.length === 0){
     offersList.innerHTML = `<div class="text-muted">No offers (cart empty).</div>`;
     return;
   }
 
-  // show offers relevant to cart items
   const offers = [];
   cart.forEach(ci => {
     const r = db.restaurants.find(x => x.id === ci.restaurantId);
@@ -445,11 +462,11 @@ function renderOffers(){
     : `<div class="text-muted">No item offers in your cart.</div>`;
 }
 
-// ---------------------- COUPONS ----------------------
 function applyCoupon(){
   const db = getDB();
-  const input = document.getElementById("couponInput").value.trim().toUpperCase();
+  const input = document.getElementById("couponInput")?.value.trim().toUpperCase() || "";
   const msg = document.getElementById("couponMsg");
+  if(!msg) return;
 
   if(!input){
     setAppliedCoupon(null);
@@ -471,72 +488,61 @@ function applyCoupon(){
   updateTotals();
 }
 
+// ✅ FIXED CHECKOUT
 function checkout(){
-  const cart = getCart();
   const msg = document.getElementById("checkoutMsg");
+  const cart = getCart();
+
+  if(!msg){
+    alert("checkoutMsg element missing in HTML.");
+    return;
+  }
+
   if(cart.length === 0){
     msg.innerHTML = `<span class="text-danger">Cart is empty.</span>`;
     return;
   }
+
   const bill = computeBill();
   msg.innerHTML = `<span class="text-success">✅ Order placed! Total paid: <b>₹${Math.round(bill.total)}</b></span>`;
-  // keep cart (or clear):
-  // clearCart();
+
+  // ✅ Clear cart after checkout (enabled)
+  saveCart([]);
+  setAppliedCoupon(null);
+  const c = document.getElementById("couponInput");
+  const cm = document.getElementById("couponMsg");
+  if(c) c.value = "";
+  if(cm) cm.innerHTML = "";
+  renderCart();
+  renderOffers();
 }
 
-// ---------------------- SELLER AUTH ----------------------
-let sellerAuthed = false;
+// ---------------------- SELLER (same as before) ----------------------
+let editingItemId = null;
 
-function sellerLogin(){
-  const u = document.getElementById("sellerUser").value.trim();
-  const p = document.getElementById("sellerPass").value.trim();
-  const msg = document.getElementById("sellerLoginMsg");
-
-  if(u === "seller" && p === "1234"){
-    sellerAuthed = true;
-    msg.innerHTML = `<span class="text-success">Logged in.</span>`;
-    document.getElementById("sellerPanel").classList.remove("d-none");
-    renderSellerRestaurants();
-    renderSellerCoupons();
-    renderSellerItems();
-    // load settings
-    const db = getDB();
-    document.getElementById("deliveryFeeInput").value = db.settings.deliveryFee;
-  } else {
-    msg.innerHTML = `<span class="text-danger">Wrong login.</span>`;
-  }
-}
-function sellerLogout(){
-  sellerAuthed = false;
-  document.getElementById("sellerPanel").classList.add("d-none");
-  document.getElementById("sellerLoginMsg").innerHTML = `<span class="text-muted">Logged out.</span>`;
-}
-
-// ---------------------- SELLER: RESTAURANTS ----------------------
 function renderSellerRestaurants(){
   const db = getDB();
   const sel = document.getElementById("sellerRestaurantSelect");
+  if(!sel) return;
   sel.innerHTML = db.restaurants.map(r => `<option value="${r.id}">${r.name}</option>`).join("");
-  if(!activeRestaurantId && db.restaurants[0]) activeRestaurantId = db.restaurants[0].id;
 }
 
 function addRestaurant(){
-  if(!sellerAuthed) return;
-  const name = document.getElementById("newRestaurantName").value.trim();
+  const name = document.getElementById("newRestaurantName")?.value.trim();
   if(!name) return;
   const db = getDB();
-  db.restaurants.push({ id: crypto.randomUUID(), name, items: [] });
+  db.restaurants.push({ id: crypto.randomUUID(), name, items: [], reviews: [] });
   saveDB(db);
   document.getElementById("newRestaurantName").value = "";
   renderSellerRestaurants();
   renderSellerItems();
-  renderBuyer();
 }
 
-// ---------------------- SELLER: COUPONS & SETTINGS ----------------------
 function renderSellerCoupons(){
   const db = getDB();
   const list = document.getElementById("couponAdminList");
+  if(!list) return;
+
   list.innerHTML = db.coupons.length
     ? db.coupons.map((c, i) => `
       <div class="d-flex justify-content-between align-items-center border rounded-3 p-2 mb-1 bg-white">
@@ -548,9 +554,8 @@ function renderSellerCoupons(){
 }
 
 function addCoupon(){
-  if(!sellerAuthed) return;
-  const code = document.getElementById("newCouponCode").value.trim().toUpperCase();
-  const percent = Number(document.getElementById("newCouponPercent").value);
+  const code = document.getElementById("newCouponCode")?.value.trim().toUpperCase();
+  const percent = Number(document.getElementById("newCouponPercent")?.value);
   if(!code || !percent) return;
 
   const db = getDB();
@@ -563,7 +568,6 @@ function addCoupon(){
 }
 
 function deleteCoupon(idx){
-  if(!sellerAuthed) return;
   const db = getDB();
   db.coupons.splice(idx, 1);
   saveDB(db);
@@ -571,36 +575,26 @@ function deleteCoupon(idx){
 }
 
 document.addEventListener("input", (e) => {
-  if(e.target?.id === "deliveryFeeInput" && sellerAuthed){
+  if(e.target?.id === "deliveryFeeInput"){
     const db = getDB();
     db.settings.deliveryFee = Number(e.target.value || 0);
     saveDB(db);
-    renderBuyer();
   }
 });
-
-// ---------------------- SELLER: ITEMS CRUD ----------------------
-let editingItemId = null;
 
 function renderSellerItems(){
   const db = getDB();
   const rid = document.getElementById("sellerRestaurantSelect")?.value;
-  if(!rid) return;
+  const wrap = document.getElementById("sellerItemsTable");
+  if(!rid || !wrap) return;
 
   const r = db.restaurants.find(x => x.id === rid);
-  const wrap = document.getElementById("sellerItemsTable");
-
   if(!r){
     wrap.innerHTML = `<div class="text-muted">Select a restaurant.</div>`;
     return;
   }
 
-  if(r.items.length === 0){
-    wrap.innerHTML = `<div class="text-muted">No items yet.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = `
+  wrap.innerHTML = r.items.length ? `
     <table class="table align-middle">
       <thead>
         <tr>
@@ -623,23 +617,22 @@ function renderSellerItems(){
         `).join("")}
       </tbody>
     </table>
-  `;
+  ` : `<div class="text-muted">No items yet.</div>`;
 }
 
 function addOrUpdateItem(){
-  if(!sellerAuthed) return;
-
-  const rid = document.getElementById("sellerRestaurantSelect").value;
-  const name = document.getElementById("itemName").value.trim();
-  const price = Number(document.getElementById("itemPrice").value);
-  const category = document.getElementById("itemCategory").value;
-  const offerPercent = Number(document.getElementById("itemOfferPercent").value || 0);
-  const bogo = document.getElementById("itemBogo").checked;
+  const rid = document.getElementById("sellerRestaurantSelect")?.value;
+  const name = document.getElementById("itemName")?.value.trim();
+  const price = Number(document.getElementById("itemPrice")?.value);
+  const category = document.getElementById("itemCategory")?.value;
+  const offerPercent = Number(document.getElementById("itemOfferPercent")?.value || 0);
+  const bogo = !!document.getElementById("itemBogo")?.checked;
 
   const msg = document.getElementById("sellerItemMsg");
+  if(msg) msg.innerHTML = "";
 
-  if(!name || !price || price <= 0){
-    msg.innerHTML = `<span class="text-danger">Enter valid item name and price.</span>`;
+  if(!rid || !name || !price || price <= 0){
+    if(msg) msg.innerHTML = `<span class="text-danger">Enter valid item name and price.</span>`;
     return;
   }
 
@@ -650,27 +643,21 @@ function addOrUpdateItem(){
   if(editingItemId){
     const it = r.items.find(x => x.id === editingItemId);
     if(!it) return;
-    it.name = name;
-    it.price = price;
-    it.category = category;
-    it.offerPercent = offerPercent;
-    it.bogo = bogo;
-    msg.innerHTML = `<span class="text-success">Updated.</span>`;
+    Object.assign(it, { name, price, category, offerPercent, bogo });
+    if(msg) msg.innerHTML = `<span class="text-success">Updated.</span>`;
   } else {
     r.items.push({ id: crypto.randomUUID(), name, price, category, offerPercent, bogo });
-    msg.innerHTML = `<span class="text-success">Added.</span>`;
+    if(msg) msg.innerHTML = `<span class="text-success">Added.</span>`;
   }
 
   saveDB(db);
   clearItemForm();
   renderSellerItems();
-  renderBuyer();
 }
 
 function editItem(itemId){
-  if(!sellerAuthed) return;
   const db = getDB();
-  const rid = document.getElementById("sellerRestaurantSelect").value;
+  const rid = document.getElementById("sellerRestaurantSelect")?.value;
   const r = db.restaurants.find(x => x.id === rid);
   const it = r?.items.find(x => x.id === itemId);
   if(!it) return;
@@ -681,44 +668,78 @@ function editItem(itemId){
   document.getElementById("itemCategory").value = it.category;
   document.getElementById("itemOfferPercent").value = it.offerPercent || 0;
   document.getElementById("itemBogo").checked = !!it.bogo;
-
-  document.getElementById("sellerItemMsg").innerHTML = `<span class="text-muted">Editing item...</span>`;
 }
 
 function deleteItem(itemId){
-  if(!sellerAuthed) return;
   const db = getDB();
-  const rid = document.getElementById("sellerRestaurantSelect").value;
+  const rid = document.getElementById("sellerRestaurantSelect")?.value;
   const r = db.restaurants.find(x => x.id === rid);
   if(!r) return;
   r.items = r.items.filter(x => x.id !== itemId);
   saveDB(db);
   renderSellerItems();
-  renderBuyer();
 }
 
 function clearItemForm(){
   editingItemId = null;
-  document.getElementById("itemName").value = "";
-  document.getElementById("itemPrice").value = "";
-  document.getElementById("itemOfferPercent").value = "";
-  document.getElementById("itemBogo").checked = false;
-  document.getElementById("sellerItemMsg").innerHTML = "";
+  const ids = ["itemName","itemPrice","itemOfferPercent"];
+  ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ""; });
+  const b = document.getElementById("itemBogo"); if(b) b.checked = false;
 }
 
-// ---------------------- DEMO RESET ----------------------
 function seedDemo(){
   localStorage.removeItem(DB_KEY);
   localStorage.removeItem(CART_KEY);
   localStorage.removeItem(COUPON_APPLIED_KEY);
   activeRestaurantId = null;
-  sellerAuthed = false;
-  document.getElementById("sellerPanel").classList.add("d-none");
-  showBuyer();
+  initPortal();
 }
 
-// ---------------------- INIT ----------------------
-(function init(){
-  getDB();      // ensure DB exists
-  showBuyer();  // default view
-})();
+// ---------------------- INIT + ROLE BASED VIEW ----------------------
+function initPortal(){
+  const session = requireAuth();
+  if(!session) return;
+
+  const who = document.getElementById("whoAmI");
+  if(who){
+    who.innerText = session.role === "buyer" ? `Buyer: ${session.buyerName}` : `Seller (Company)`;
+  }
+
+  if(session.role === "buyer"){
+    document.getElementById("buyerSection").classList.remove("d-none");
+    document.getElementById("sellerSection").classList.add("d-none");
+    getDB();
+    renderBuyer();
+  } else {
+    document.getElementById("sellerSection").classList.remove("d-none");
+    document.getElementById("buyerSection").classList.add("d-none");
+    const db = getDB();
+    const fee = document.getElementById("deliveryFeeInput");
+    if(fee) fee.value = db.settings.deliveryFee;
+    renderSellerRestaurants();
+    renderSellerCoupons();
+    renderSellerItems();
+  }
+}
+
+initPortal();
+
+// ✅ IMPORTANT: make onclick functions always available globally
+window.logout = logout;
+window.renderBuyer = renderBuyer;
+window.addToCart = addToCart;
+window.changeQty = changeQty;
+window.clearCart = clearCart;
+window.applyCoupon = applyCoupon;
+window.checkout = checkout;
+window.submitReview = submitReview;
+
+window.seedDemo = seedDemo;
+window.addRestaurant = addRestaurant;
+window.addCoupon = addCoupon;
+window.deleteCoupon = deleteCoupon;
+window.renderSellerItems = renderSellerItems;
+window.addOrUpdateItem = addOrUpdateItem;
+window.editItem = editItem;
+window.deleteItem = deleteItem;
+window.clearItemForm = clearItemForm;
