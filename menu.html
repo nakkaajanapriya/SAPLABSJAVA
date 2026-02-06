@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Menu</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">📋 Menu</div>
+    <div class="nav-actions" style="display:flex; gap:10px;">
+      <button onclick="window.location.href='cart.html'">
+        Cart (<span data-cart-count>0</span>)
+      </button>
+      <button onclick="window.location.href='index.html'">Back</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h1 id="title"></h1>
+      <p class="sub" id="meta"></p>
+      <div class="badge" id="offer"></div>
+
+      <div id="menuList" style="margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="app.js"></script>
+  <script src="cart.js"></script>
+  <script>
+    requireAuth();
+    initCartBadges();
+
+    const id = new URLSearchParams(location.search).get("id");
+    const r = restaurants.find(x => x.id === id);
+
+    if (!r) {
+      document.getElementById("title").innerText = "Restaurant not found";
+      document.getElementById("menuList").innerHTML = `<p class="sub">Go back and try again.</p>`;
+    } else {
+      document.getElementById("title").innerText = r.name;
+      document.getElementById("meta").innerText = `${r.location} • ⭐ ${r.rating}`;
+      document.getElementById("offer").innerText = r.offer;
+
+      // ✅ Detect offer type
+      const offerText = (r.offer || "").toLowerCase();
+      let offerType = "NONE";
+      let offerValue = 0;
+
+      if (/buy\s*1\s*get\s*1/.test(offerText)) {
+        offerType = "BOGO";
+      } else {
+        const pct = parseInt(r.offer, 10);
+        if (!isNaN(pct) && pct > 0) {
+          offerType = "PERCENT";
+          offerValue = pct;
+        }
+      }
+
+      document.getElementById("menuList").innerHTML = r.menu.map(item => `
+        <div class="menu-item">
+          <div>
+            <div class="name">${item.name}</div>
+            <div class="desc">${item.desc}</div>
+            <div class="desc">Offer: ${offerType === "BOGO" ? "Buy 1 Get 1" : (offerType === "PERCENT" ? offerValue + "% OFF" : "No offer")}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="price">₹${item.price}</div>
+            <button class="qty-btn" style="margin-top:8px;"
+              onclick='addToCart({
+                key: "${r.id}::${item.name}",
+                restaurantName: "${r.name}",
+                name: "${item.name}",
+                price: ${item.price},
+                offerType: "${offerType}",
+                offerValue: ${offerValue}
+              })'>
+              Add
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+  </script>
+</body>
+</html>

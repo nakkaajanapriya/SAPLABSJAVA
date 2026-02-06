@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container" style="max-width:420px;">
+    <div class="card">
+      <h1>Create Account</h1>
+      <p class="sub">First-time users must register.</p>
+
+      <input id="name" class="input" placeholder="Full Name" />
+      <br><br>
+      <input id="email" class="input" placeholder="Email" />
+      <br><br>
+      <input id="password" class="input" type="password" placeholder="Password" />
+
+      <button class="btn" onclick="register()">Register</button>
+
+      <div class="link">Already have an account? <a href="login.html">Login</a></div>
+      <p id="msg" style="margin-top:10px; color:#d00; font-weight:700;"></p>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script>
+    // If already logged in, go to home
+    if (getSession()) window.location.href = "index.html";
+
+    function register() {
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim().toLowerCase();
+      const password = document.getElementById("password").value;
+
+      const msg = document.getElementById("msg");
+      msg.textContent = "";
+
+      if (!name || !email || !password) {
+        msg.textContent = "Please fill all fields.";
+        return;
+      }
+
+      const users = getUsers();
+      const exists = users.some(u => u.email === email);
+      if (exists) {
+        msg.textContent = "User already exists. Please login.";
+        return;
+      }
+
+      users.push({ name, email, password });
+      saveUsers(users);
+
+      // After registering, log them in
+      setSession(email);
+      window.location.href = "index.html";
+    }
+  </script>
+</body>
+</html>

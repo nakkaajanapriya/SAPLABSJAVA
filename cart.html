@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Your Cart</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">🛒 Cart (<span data-cart-count>0</span>)</div>
+    <div class="nav-actions" style="display:flex; gap:10px;">
+      <button onclick="window.location.href='index.html'">Home</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h1>Bill Summary</h1>
+      <p class="sub">Offers + taxes are calculated automatically.</p>
+
+      <div id="cartItems"></div>
+
+      <div style="margin-top:14px;">
+        <div class="menu-item">
+          <div style="width:100%;">
+            <div class="name">Apply Coupon</div>
+            <div class="desc">Try: SAVE10, SAVE20, FREEPLATFORM</div>
+            <div style="display:flex; gap:10px; margin-top:8px;">
+              <input id="couponInput" class="input" placeholder="Enter coupon code" style="flex:1;">
+              <button class="qty-btn" onclick="applyCoupon()">Apply</button>
+              <button class="qty-btn light" onclick="removeCoupon()">Remove</button>
+            </div>
+            <div class="desc" style="margin-top:8px;">
+              Applied: <strong><span id="appliedCoupon">None</span></strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr style="margin:15px 0">
+
+      <p>Item Total: ₹<span id="itemTotal">0</span></p>
+      <p>Offer Discount: − ₹<span id="offerDiscount">0</span></p>
+      <p>Coupon Discount: − ₹<span id="couponDiscount">0</span></p>
+      <p>GST (5%): ₹<span id="gst">0</span></p>
+      <p>Platform Fee: ₹<span id="platform">0</span></p>
+
+      <h2 style="margin-top:10px;">
+        To Pay: ₹<span id="payable">0</span>
+      </h2>
+
+      <button class="btn" onclick="checkout()">Place Order</button>
+      <button class="btn" style="background:#fff;color:#111;border:1px solid #ddd;" onclick="clearCart()">Clear Cart</button>
+
+      <p id="emptyMsg" class="sub" style="display:none; margin-top:10px;">Your cart is empty.</p>
+    </div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="cart.js"></script>
+  <script>
+    requireAuth();
+    initCartBadges();
+
+    function offerLabel(i) {
+      if (i.offerType === "BOGO") return "Buy 1 Get 1";
+      if (i.offerType === "PERCENT") return `${i.offerValue}% OFF`;
+      return "No offer";
+    }
+
+    function renderCart() {
+      const cart = getCart();
+      const box = document.getElementById("cartItems");
+
+      if (!cart.length) {
+        document.getElementById("emptyMsg").style.display = "block";
+        box.innerHTML = "";
+        document.getElementById("couponInput").value = "";
+        document.getElementById("appliedCoupon").innerText = "None";
+        return;
+      }
+
+      document.getElementById("emptyMsg").style.display = "none";
+
+      box.innerHTML = cart.map(i => `
+        <div class="menu-item">
+          <div>
+            <div class="name">${i.name}</div>
+            <div class="desc">${i.restaurantName}</div>
+            <div class="desc">₹${i.price} × ${i.qty} | Offer: ${offerLabel(i)}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+            <div style="display:flex; gap:8px;">
+              <button class="qty-btn" onclick="changeQty('${i.key}',-1)">-</button>
+              <button class="qty-btn" onclick="changeQty('${i.key}',1)">+</button>
+            </div>
+            <button class="qty-btn light" onclick="removeFromCart('${i.key}')">Remove</button>
+          </div>
+        </div>
+      `).join("");
+
+      const bill = calculateBill(cart);
+
+      document.getElementById("itemTotal").innerText = bill.itemTotal;
+      document.getElementById("offerDiscount").innerText = bill.offerDiscount;
+      document.getElementById("couponDiscount").innerText = bill.couponDiscount;
+      document.getElementById("gst").innerText = bill.gst;
+      document.getElementById("platform").innerText = bill.platformFee;
+      document.getElementById("payable").innerText = bill.payable;
+
+      document.getElementById("appliedCoupon").innerText = bill.coupon || "None";
+      document.getElementById("couponInput").value = bill.coupon || "";
+    }
+
+    function applyCoupon() {
+      const code = document.getElementById("couponInput").value.trim().toUpperCase();
+      setCoupon(code);
+      renderCart();
+    }
+
+    function removeCoupon() {
+      clearCoupon();
+      renderCart();
+    }
+
+    function checkout() {
+      const cart = getCart();
+      if (!cart.length) return alert("Cart is empty!");
+      alert("Order placed successfully ✅");
+      clearCart();
+      clearCoupon();
+    }
+
+    renderCart();
+  </script>
+</body>
+</html>
