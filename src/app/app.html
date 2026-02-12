@@ -1,0 +1,74 @@
+<!-- LOGIN -->
+<div *ngIf="mode==='login'" class="card">
+  <h2>Login</h2>
+  <input [(ngModel)]="loginEmail" placeholder="Email">
+  <input [(ngModel)]="loginPassword" type="password" placeholder="Password">
+  <button (click)="login()">Login</button>
+  <p class="link" (click)="mode='register'">New user? Register</p>
+  <div class="msg">{{message}}</div>
+</div>
+
+<!-- REGISTER -->
+<div *ngIf="mode==='register'" class="card">
+  <h2>Register</h2>
+  <input [(ngModel)]="regName" placeholder="Name">
+  <input [(ngModel)]="regEmail" placeholder="Email">
+  <input [(ngModel)]="regPassword" type="password" placeholder="Password">
+  <button (click)="register()">Register</button>
+  <p class="link" (click)="mode='login'">Already have account?</p>
+</div>
+
+<!-- NAVIGATION -->
+<div *ngIf="mode!=='login' && mode!=='register'" class="nav">
+  <button (click)="mode='products'">Products</button>
+  <button (click)="mode='cart'">Cart</button>
+  <button (click)="mode='wishlist'">Wishlist</button>
+  <button (click)="mode='orders'">Orders</button>
+  <button (click)="logout()">Logout</button>
+</div>
+
+<!-- PRODUCTS -->
+<div *ngIf="mode==='products'" class="grid">
+  <div *ngFor="let p of products" class="card">
+    <img [src]="p.image">
+    <h3>{{p.title}}</h3>
+    <p>₹{{p.price}}</p>
+    <button (click)="addToCart(p)">Add to Cart</button>
+    <button (click)="toggleWishlist(p)">
+      {{inWishlist(p.id) ? 'Remove Wishlist' : 'Add Wishlist'}}
+    </button>
+  </div>
+</div>
+
+<!-- CART -->
+<div *ngIf="mode==='cart'" class="section">
+  <h2>Your Cart</h2>
+  <div *ngFor="let c of getCart()">
+    {{c.product.title}} (x{{c.qty}}) - ₹{{c.product.price * c.qty}}
+    <button (click)="removeFromCart(c.product.id)">Remove</button>
+  </div>
+  <h3>Total: ₹{{cartTotal()}}</h3>
+  <button (click)="placeOrder()">Place Order</button>
+</div>
+
+<!-- WISHLIST -->
+<div *ngIf="mode==='wishlist'" class="section">
+  <h2>Wishlist</h2>
+  <div *ngFor="let p of getWishlist()">
+    {{p.title}} - ₹{{p.price}}
+  </div>
+</div>
+
+<!-- ORDERS -->
+<div *ngIf="mode==='orders'" class="section">
+  <h2>Previous Orders</h2>
+  <div *ngFor="let o of getOrders()">
+    <strong>Order ID:</strong> {{o.id}} <br>
+    <strong>Date:</strong> {{o.date}} <br>
+    <strong>Total:</strong> ₹{{o.total}}
+    <div *ngFor="let item of o.items">
+      - {{item.product.title}} (x{{item.qty}})
+    </div>
+    <hr>
+  </div>
+</div>
