@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Food Portal - Login</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark px-3">
+  <span class="navbar-brand fw-bold">🍽 Food Portal</span>
+</nav>
+
+<div class="container my-5" style="max-width: 980px;">
+  <div class="row g-4">
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm">
+        <div class="card-body p-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="m-0">Buyer</h4>
+            <div class="btn-group">
+              <button id="btnBuyerLogin" class="btn btn-dark btn-sm" onclick="showBuyerMode('login')">Login</button>
+              <button id="btnBuyerRegister" class="btn btn-outline-dark btn-sm" onclick="showBuyerMode('register')">Register</button>
+            </div>
+          </div>
+
+          <div id="buyerLoginBox">
+            <label class="form-label">Email</label>
+            <input id="buyerLoginEmail" class="form-control mb-2" placeholder="buyer@gmail.com" />
+
+            <label class="form-label">Password</label>
+            <input id="buyerLoginPass" type="password" class="form-control mb-3" placeholder="••••••••" />
+
+            <button class="btn btn-success w-100" onclick="buyerLogin()">Login as Buyer</button>
+            <div id="buyerLoginMsg" class="small mt-2"></div>
+          </div>
+
+          <div id="buyerRegisterBox" class="d-none">
+            <label class="form-label">Full Name</label>
+            <input id="buyerRegName" class="form-control mb-2" placeholder="Your name" />
+
+            <label class="form-label">Email</label>
+            <input id="buyerRegEmail" class="form-control mb-2" placeholder="buyer@gmail.com" />
+
+            <label class="form-label">Password</label>
+            <input id="buyerRegPass" type="password" class="form-control mb-3" placeholder="Create password" />
+
+            <button class="btn btn-dark w-100" onclick="buyerRegister()">Create Buyer Account</button>
+            <div id="buyerRegMsg" class="small mt-2"></div>
+
+            <div class="small text-muted mt-3">
+              After registering once, you can login anytime.
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-warning">
+        <div class="card-body p-4">
+          <h4 class="mb-3">Seller (Company Only)</h4>
+
+          <label class="form-label">Username</label>
+          <input id="sellerUser" class="form-control mb-2" placeholder="seller" value="seller" />
+
+          <label class="form-label">Password</label>
+          <input id="sellerPass" type="password" class="form-control mb-3" placeholder="1234" value="1234" />
+
+          <button class="btn btn-warning w-100" onclick="sellerLogin()">Login as Seller</button>
+          <div id="sellerMsg" class="small mt-2"></div>
+
+          <div class="small text-muted mt-3">
+            Only one seller account is allowed (fixed credentials).
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="auth.js"></script>
+</body>
+</html>

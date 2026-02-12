@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Restaurants & Offers</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="navbar">
+    <div class="brand">🍽️ Food Offers</div>
+    <div class="nav-actions" style="display:flex; gap:10px;">
+      <button onclick="window.location.href='cart.html'">
+        Cart (<span data-cart-count>0</span>)
+      </button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1>Restaurants Near You</h1>
+    <p class="sub">Tap a restaurant to view menu & offers.</p>
+
+    <div id="list" class="grid"></div>
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="app.js"></script>
+  <script src="cart.js"></script>
+  <script>
+    requireAuth();
+
+    const list = document.getElementById("list");
+    list.innerHTML = restaurants.map(r => `
+      <div class="card">
+        <div class="restaurant">
+          <div class="rest-img"></div>
+          <div>
+            <div class="rest-title">${r.name}</div>
+            <div class="rest-meta">${r.location} • ⭐ ${r.rating}</div>
+            <div class="badge">${r.offer}</div>
+            <a class="smallbtn" href="menu.html?id=${r.id}">Open Menu</a>
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    // ✅ instant cart badge
+    initCartBadges();
+  </script>
+</body>
+</html>
